@@ -1,0 +1,11 @@
+.build/
+.swiftpm/
+.DS_Store
+Build/
+Public/
+.env
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+node_modules/
+notebook.png

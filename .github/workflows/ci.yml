@@ -1,0 +1,101 @@
+name: CI
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    name: Swift / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select Xcode 26.2 SDK
+        if: runner.os == 'macOS'
+        run: sudo xcode-select --switch /Applications/Xcode_26.2.app
+      - uses: swift-actions/setup-swift@v2
+        if: runner.os == 'Linux'
+        with:
+          swift-version: '6.2'
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: .build
+          key: s5-${{ runner.os }}-swift62-sdk262-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            s5-${{ runner.os }}-swift62-sdk262-
+            s5-${{ runner.os }}-swift623-sdk262-
+            s5-${{ runner.os }}-swift62-
+      - run: swift test --parallel
+      - run: node --test Tests/Browser/runtime.test.mjs
+      - name: Capture resolved dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/s5/verification"
+          cp Package.resolved "$RUNNER_TEMP/s5/verification/Package.resolved"
+      - name: Generate application
+        run: .build/debug/s5 new Notebook --directory "$RUNNER_TEMP/s5" --s5-path "$GITHUB_WORKSPACE"
+      - name: Test generated application
+        run: swift test --package-path "$RUNNER_TEMP/s5/Notebook" --scratch-path "$GITHUB_WORKSPACE/.build"
+      - name: Publish Ignite frontend
+        run: |
+          cd "$RUNNER_TEMP/s5/Notebook"
+          swift run --scratch-path "$GITHUB_WORKSPACE/.build" Frontend
+          test -f Public/index.html
+          test -f Public/s5/client.mjs
+      - name: Test browser against Vapor
+        if: runner.os == 'Linux'
+        run: |
+          npm install --prefix Tests/Browser --ignore-scripts --no-package-lock
+          npx --prefix Tests/Browser playwright install --with-deps chromium
+          cd "$RUNNER_TEMP/s5/Notebook"
+          "$GITHUB_WORKSPACE/.build/debug/Server" serve --hostname 127.0.0.1 --port 8080 > server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/ready > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/ready
+          S5_SCREENSHOT="$RUNNER_TEMP/s5/Notebook/notebook.png" node "$GITHUB_WORKSPACE/Tests/Browser/notebook.mjs"
+      - name: Build production container
+        if: runner.os == 'Linux'
+        run: |
+          .build/debug/s5 new ContainerNotes --directory "$RUNNER_TEMP/s5-container" --revision "$GITHUB_SHA"
+          cd "$RUNNER_TEMP/s5-container/ContainerNotes"
+          docker compose build app
+      - name: Test container with PostgreSQL
+        if: runner.os == 'Linux'
+        run: |
+          cd "$RUNNER_TEMP/s5-container/ContainerNotes"
+          trap 'docker compose logs app; docker compose down --volumes' EXIT
+          docker compose up -d db
+          docker compose run --rm app migrate --env production --yes
+          docker compose up -d app
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/ready > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/ready
+          node "$GITHUB_WORKSPACE/Tests/Browser/notebook.mjs"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: starter-${{ runner.os }}
+          path: |
+            ${{ runner.temp }}/s5/Notebook/Public
+            ${{ runner.temp }}/s5/Notebook/notebook.png
+            ${{ runner.temp }}/s5/Notebook/server.log
+            ${{ runner.temp }}/s5/verification/Package.resolved
+      - uses: actions/cache/save@v4
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: .build
+          key: ${{ steps.cache.outputs.cache-primary-key }}

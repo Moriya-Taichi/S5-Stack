@@ -1,0 +1,41 @@
+// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+    name: "__PROJECT_NAME__",
+    platforms: [.macOS(.v14), .iOS(.v17)],
+    products: [
+        .library(name: "AppContract", targets: ["AppContract"]),
+        .executable(name: "Frontend", targets: ["Frontend"]),
+        .executable(name: "Server", targets: ["Server"]),
+    ],
+    dependencies: [
+        __S5_DEPENDENCY__,
+        .package(url: "https://github.com/twostraws/Ignite.git", exact: "0.6.9"),
+        .package(url: "https://github.com/vapor/vapor.git", exact: "4.122.1"),
+        .package(url: "https://github.com/vapor/fluent.git", exact: "4.13.0"),
+        .package(url: "https://github.com/vapor/fluent-sqlite-driver.git", exact: "4.9.0"),
+        .package(url: "https://github.com/vapor/fluent-postgres-driver.git", exact: "2.12.0"),
+    ],
+    targets: [
+        .target(name: "AppContract", dependencies: [.product(name: "S5", package: "__S5_PACKAGE_ID__")]),
+        .target(name: "ServerApp", dependencies: [
+            "AppContract", .product(name: "S5", package: "__S5_PACKAGE_ID__"),
+            .product(name: "S5Vapor", package: "__S5_PACKAGE_ID__"),
+            .product(name: "Vapor", package: "vapor"),
+            .product(name: "Fluent", package: "fluent"),
+            .product(name: "FluentSQLiteDriver", package: "fluent-sqlite-driver"),
+            .product(name: "FluentPostgresDriver", package: "fluent-postgres-driver"),
+        ]),
+        .executableTarget(name: "Server", dependencies: ["ServerApp", .product(name: "Vapor", package: "vapor")]),
+        .executableTarget(name: "Frontend", dependencies: [
+            "AppContract", .product(name: "S5Ignite", package: "__S5_PACKAGE_ID__"),
+            .product(name: "Ignite", package: "Ignite"),
+        ]),
+        .testTarget(name: "ServerAppTests", dependencies: [
+            "ServerApp", "AppContract", .product(name: "S5", package: "__S5_PACKAGE_ID__"),
+            .product(name: "S5Client", package: "__S5_PACKAGE_ID__"),
+            .product(name: "VaporTesting", package: "vapor"),
+        ]),
+    ]
+)
