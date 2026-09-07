@@ -25,6 +25,7 @@ there is no file watcher. `s5 build --release` creates optimized binaries and th
 | `Sources/ServerApp` | Vapor routes and server-only Fluent models/migrations |
 | `Sources/Server` | Server lifecycle |
 | `Tests/ServerAppTests` | SQLite integration tests |
+| `Infrastructure` | Independent Swift package using pinned Nido to manage deployment |
 
 `Public/s5/client.mjs` is generated from the Swift endpoint catalog. Browser code imports it and calls
 `api.createNote({ text: "Hello" })`. Swift clients use `APIClient.call(NotesAPI.Create.self, input: .init(text: "Hello"))`.
@@ -68,8 +69,38 @@ If using SQLite in the container instead, mount a persistent volume at `/data` (
 swift test
 ```
 
-Nido remains a separate IaC project. This application does not import it, provision resources, or embed cloud credentials.
-Nido or any other deployment tool may deploy the image and provide the database URL.
+## Deploy with Nido
+
+The separate `Infrastructure` package pins Nido to a commit. `s5 infra` runs the Nido CLI from that
+SwiftPM dependency; there is no separately installed Nido CLI requirement. App runtime targets do not depend on Nido.
+The default stack targets **local Docker**, with SQLite storage, a one-shot migration container, and the app.
+It checks the migration exit code before starting the app, then waits for `/ready` to succeed.
+
+```sh
+s5 infra synth
+s5 infra --skip-synth diagram --format svg --output architecture.svg
+# Docker Engine and Terraform 1.5+ are required for the following commands.
+docker build -t myapp:release-1 .
+export TF_VAR_image=myapp:release-1
+s5 infra init
+s5 infra plan -out=review.tfplan
+s5 infra --skip-synth apply review.tfplan
+s5 infra output
+```
+
+Open http://127.0.0.1:8080. Stop `s5 dev` or Compose first to release that port.
+For each release use a new image tag or a registry digest; mutable tag updates are not automatically detected.
+The volume survives replacement of the application container. Plan downtime and backups for incompatible database migrations.
+`s5 infra destroy` also deletes the SQLite volume and its data.
+
+Nido forwards Terraform/OpenTofu operations and owns the working directory `Infrastructure/.nido`.
+For OpenTofu, use `s5 infra --engine tofu init` and the same option for later commands.
+Nido options go before its subcommand, engine flags after it; for example `s5 infra plan -detailed-exitcode`
+preserves exit code 2 for a nonempty plan. Relative engine paths are relative to `Infrastructure/.nido`.
+Commit `Infrastructure/Package.resolved` and the provider lock `Infrastructure/.nido/.terraform.lock.hcl`.
+State and plan files are ignored because they can contain secrets. Do not commit them.
+Cloud placement or managed PostgreSQL requires extending this Swift infrastructure definition with Nido's cloud APIs.
+The Compose example remains available for local PostgreSQL development and is managed separately from Nido.
 
 Endpoint versions are explicit. For incompatible input/output changes, add a new version and retain the old route
 while deployed clients need it. Sharing source types does not prove compatibility with previously released clients.

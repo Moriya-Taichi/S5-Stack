@@ -9,7 +9,7 @@ RUN mkdir /out && cp .build/release/Server /out/ && \
     find .build/release -maxdepth 1 -type d -name '*.resources' -exec cp -R {} /out/ \;
 
 FROM ubuntu:24.04
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libcurl4t64 libxml2 libsqlite3-0 tzdata && \
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libcurl4t64 libxml2 libsqlite3-0 tzdata && \
     rm -rf /var/lib/apt/lists/* && useradd --create-home --uid 10001 s5
 WORKDIR /app
 COPY --from=build --chown=s5:s5 /out/ /app/

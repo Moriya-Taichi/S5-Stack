@@ -10,7 +10,13 @@ import Testing
     let manifest = try String(contentsOf: project.appendingPathComponent("Package.swift"), encoding: .utf8)
     #expect(manifest.contains("Fieldnotes"))
     #expect(!manifest.contains("__S5_"))
-    #expect(!manifest.contains("Nido"))
+    #expect(!manifest.contains("Nido")) // Deployment dependencies do not enter the app's graph.
+    let infrastructure = try String(contentsOf: project.appendingPathComponent("Infrastructure/Package.swift"), encoding: .utf8)
+    #expect(infrastructure.contains("Moriya-Taichi/Nido.git"))
+    #expect(infrastructure.contains("a68679e85cb5f74d316d703cbcdadc218289ffdb"))
+    let stack = try String(contentsOf: project.appendingPathComponent("Infrastructure/Sources/Infrastructure/main.swift"), encoding: .utf8)
+    #expect(stack.contains("Fieldnotes-data"))
+    #expect(!stack.contains("__PROJECT_NAME__"))
     #expect(FileManager.default.fileExists(atPath: project.appendingPathComponent(".gitignore").path))
     #expect(throws: GeneratorError.self) { try generator.generate(name: "Fieldnotes", in: directory) }
     #expect(try String(contentsOf: project.appendingPathComponent("Package.swift"), encoding: .utf8) == manifest)

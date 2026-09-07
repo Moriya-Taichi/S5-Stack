@@ -6,3 +6,13 @@ Public/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+# Nido state and plans can contain secrets. Commit provider/dependency locks instead.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+**/.nido/*
+!**/.nido/.terraform.lock.hcl
+*.tfvars
+*.tfvars.json
+!*.tfvars.example

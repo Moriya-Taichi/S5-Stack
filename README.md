@@ -8,10 +8,10 @@
 | Schema | S5 | APIの入力・出力・バリデーション・バージョンを共有 |
 | Service | [Vapor](https://github.com/vapor/vapor) + S5Vapor | 型付きハンドラーをHTTP APIとして公開 |
 | Store | [Fluent](https://github.com/vapor/fluent) | SQLite / PostgreSQL、モデル、マイグレーション |
-| Ship | s5 CLI + Docker | プロジェクト生成、開発起動、成果物のビルド |
+| Ship | s5 CLI + Docker + [Nido](https://github.com/Moriya-Taichi/Nido) | プロジェクト生成、ビルド、インフラ定義・適用 |
 
-Nidoは独立したIaCプロジェクトです。S5はNidoを依存に含めず、クラウドリソースも作成しません。
-生成したコンテナイメージや環境変数を、Nidoなど任意のデプロイツールで扱えます。
+Nidoは独立したIaCパッケージとして利用します。生成アプリの`Infrastructure/`がNidoのコミットを固定して参照し、
+`s5 infra`から構成生成・plan・apply・構成図出力を実行します。Webアプリ本体とS5のランタイムにはNidoの依存を追加しません。
 
 ## 始める
 
@@ -140,6 +140,7 @@ Int64などJavaScriptの安全な整数範囲を超える値は、文字列のDT
 | `s5 new MyApp` | 独立したSwift Packageを生成 |
 | `s5 dev` | 画面をビルドしてVaporをローカル起動 |
 | `s5 build --release` | 最適化したサーバー実行ファイルと`Public/`を生成 |
+| `s5 infra <Nidoの引数>` | 独立したInfrastructureパッケージのNido CLIを実行 |
 
 生成したアプリは通常のSwift Packageとして編集できます。CLIを使わずに`swift run Frontend`、
 `swift run Server`、`swift test`を実行することもできます。Swiftクライアント向けに`AppContract`をライブラリ製品として公開しています。
@@ -158,6 +159,42 @@ swift run Server serve --env production --hostname 0.0.0.0 --port 8080
 Dockerfileと、ローカルでPostgreSQLも起動するCompose設定を生成します。具体的な手順は生成されたREADMEを参照してください。
 DockerビルドではS5にリモートのコミット依存を使います。ビルドコンテキスト外の`--s5-path`はコンテナから参照できません。
 
+## Nidoでデプロイする
+
+`s5 new`は`Infrastructure/Package.swift`とSwiftのインフラ定義も生成します。
+NidoとDockerプロバイダーのバージョンは固定しています。Nido CLIはSwiftPMが依存から実行するため、別途インストールする必要はありません。
+
+```sh
+# 生成したアプリのディレクトリで実行。構成と図の生成だけならDockerやTerraformは不要。
+s5 infra synth
+s5 infra --skip-synth diagram --format svg --output architecture.svg
+
+# Docker EngineとTerraform 1.5+を用意し、S5をリモート依存にしたアプリをビルド。
+docker build -t myapp:release-1 .
+export TF_VAR_image=myapp:release-1
+s5 infra init
+s5 infra plan -out=review.tfplan
+s5 infra --skip-synth apply review.tfplan
+s5 infra output
+```
+
+初期構成は**ローカルDockerへのデプロイ**です。Nidoがイメージ、SQLiteの永続ボリューム、
+マイグレーション用コンテナ、アプリコンテナを管理します。マイグレーションの終了コードを検証してからアプリを起動し、
+`/ready`でDBの準備完了を確認します。公開先は`http://127.0.0.1:8080`です。
+Composeや`s5 dev`も8080番を使うため、同時には起動しないでください。
+
+更新時は新しいタグまたはレジストリのdigestを`TF_VAR_image`に指定してplan/applyします。同じタグの上書きは検出対象にしません。
+SQLiteは単一アプリ向けです。破壊的なスキーマ変更には停止・バックアップを含む移行手順を用意してください。
+クラウド上への配置やPostgreSQLの構築は、`Infrastructure`の定義をNidoの各クラウド用APIで拡張します。
+
+`--engine tofu`などのオプション、保存済みプラン、終了コードはNidoにそのまま渡します。
+stateは`Infrastructure/.nido/`に置き、S5側では複製しません。`Infrastructure/Package.resolved`と
+`Infrastructure/.nido/.terraform.lock.hcl`で依存を管理してください。
+`s5 infra destroy`はアプリと**SQLiteのデータボリュームも削除**する操作です。
+
+以前のS5で作成したアプリには、新しい`s5 new`で生成した`Infrastructure/`をコピーし、コンテナのhealthcheckで使う`curl`をDockerfileに追加してください。
+既存のComposeリソースやデータを自動で取り込む機能はありません。
+
 ## 保証範囲
 
 - Swiftの入力型・出力型・ハンドラーの対応をコンパイル時に検査します。
@@ -165,7 +202,7 @@ DockerビルドではS5にリモートのコミット依存を使います。ビ
 - サーバーの内部エラーの詳細をクライアントに返しません。
 - サンプルは認証なしの共有ノートです。ログインやユーザーごとの所有権はアプリ側で実装します。
 - `Endpoint.version`で通信バージョンを指定できます。過去に配布したクライアントとの互換性の自動検証は含みません。
-- 認証基盤、リアルタイム購読、キャッシュ、ファイル監視、IaCはこの初期実装に含めていません。
+- 認証基盤、リアルタイム購読、キャッシュ、ファイル監視、クラウド別のデプロイテンプレートはこの初期実装に含めていません。
 
 ## 検証
 
@@ -177,3 +214,5 @@ node --test Tests/Browser/runtime.test.mjs
 CIはmacOSとLinuxでライブラリをテストし、CLIで生成したアプリについてDBを含むCRUDテストとIgniteのビルドを実行します。
 LinuxではChromiumから実際のVaporサーバーに接続し、作成・再読み込み・完了・削除、HTMLを含む入力の表示、
 モバイル幅でのレイアウトを確認します。
+
+Nido連携は構成と図の生成、Terraformのvalidate、保存済みplanの適用、ブラウザ操作、差分のない再plan、コンテナ再作成後の永続化をCIで検証します。
