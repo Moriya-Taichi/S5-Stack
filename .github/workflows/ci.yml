@@ -1,0 +1,29 @@
+name: CI
+on:
+  push:
+    branches: [main, 'feat/**']
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    name: Swift / ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: '6.2'
+      - uses: actions/cache@v4
+        with:
+          path: .build
+          key: s5-${{ runner.os }}-swift62-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: s5-${{ runner.os }}-swift62-
+      - run: swift test --parallel
