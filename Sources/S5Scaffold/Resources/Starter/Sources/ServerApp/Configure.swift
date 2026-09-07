@@ -27,7 +27,7 @@ public func configure(_ app: Application, inMemory: Bool = false) async throws {
         try await app.autoMigrate()
     }
 
-    app.get("health") { ["status": "ok"] }
+    app.get("health") { _ in ["status": "ok"] }
     app.get("ready") { request async throws -> [String: String] in
         _ = try await NoteRecord.query(on: request.db).count()
         return ["status": "ready"]

@@ -65,13 +65,17 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/ready
           S5_SCREENSHOT="$RUNNER_TEMP/s5/Notebook/notebook.png" node "$GITHUB_WORKSPACE/Tests/Browser/notebook.mjs"
-      - name: Test container with PostgreSQL
+      - name: Build production container
         if: runner.os == 'Linux'
         run: |
           .build/debug/s5 new ContainerNotes --directory "$RUNNER_TEMP/s5-container" --revision "$GITHUB_SHA"
           cd "$RUNNER_TEMP/s5-container/ContainerNotes"
-          trap 'docker compose logs app; docker compose down --volumes' EXIT
           docker compose build app
+      - name: Test container with PostgreSQL
+        if: runner.os == 'Linux'
+        run: |
+          cd "$RUNNER_TEMP/s5-container/ContainerNotes"
+          trap 'docker compose logs app; docker compose down --volumes' EXIT
           docker compose up -d db
           docker compose run --rm app migrate --env production --yes
           docker compose up -d app
