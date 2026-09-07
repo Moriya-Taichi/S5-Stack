@@ -7,7 +7,10 @@ import S5Ignite
 struct Frontend {
     static func main() async throws {
         let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-        var site = NotesSite()
+        let siteURL = ProcessInfo.processInfo.environment["SITE_URL"] ?? "http://localhost:8080"
+        guard let url = URL(string: siteURL), let scheme = url.scheme,
+              ["http", "https"].contains(scheme), url.host != nil else { throw URLError(.badURL) }
+        var site = NotesSite(url: url)
         try await site.publish(api: NotesAPI.catalog(), sourceDirectory: root,
                                buildDirectory: root.appendingPathComponent("Public"))
     }
@@ -15,7 +18,7 @@ struct Frontend {
 
 struct NotesSite: Site {
     var name = "__PROJECT_NAME__"
-    var url = URL(string: ProcessInfo.processInfo.environment["SITE_URL"] ?? "http://localhost:8080")!
+    var url: URL
     var homePage = Home()
     var layout = MainLayout()
 }

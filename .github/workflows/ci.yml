@@ -24,15 +24,22 @@ jobs:
       - uses: swift-actions/setup-swift@v2
         if: runner.os == 'Linux'
         with:
-          swift-version: '6.2.3'
+          swift-version: '6.2'
       - uses: actions/cache@v4
         id: cache
         with:
           path: .build
-          key: s5-${{ runner.os }}-swift623-sdk262-${{ hashFiles('Package.swift', 'Package.resolved') }}
-          restore-keys: s5-${{ runner.os }}-swift623-sdk262-
+          key: s5-${{ runner.os }}-swift62-sdk262-${{ hashFiles('Package.swift', 'Package.resolved') }}
+          restore-keys: |
+            s5-${{ runner.os }}-swift62-sdk262-
+            s5-${{ runner.os }}-swift623-sdk262-
+            s5-${{ runner.os }}-swift62-
       - run: swift test --parallel
       - run: node --test Tests/Browser/runtime.test.mjs
+      - name: Capture resolved dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/s5/verification"
+          cp Package.resolved "$RUNNER_TEMP/s5/verification/Package.resolved"
       - name: Generate application
         run: .build/debug/s5 new Notebook --directory "$RUNNER_TEMP/s5" --s5-path "$GITHUB_WORKSPACE"
       - name: Test generated application
@@ -58,6 +65,22 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/ready
           S5_SCREENSHOT="$RUNNER_TEMP/s5/Notebook/notebook.png" node "$GITHUB_WORKSPACE/Tests/Browser/notebook.mjs"
+      - name: Test container with PostgreSQL
+        if: runner.os == 'Linux'
+        run: |
+          .build/debug/s5 new ContainerNotes --directory "$RUNNER_TEMP/s5-container" --revision "$GITHUB_SHA"
+          cd "$RUNNER_TEMP/s5-container/ContainerNotes"
+          trap 'docker compose logs app; docker compose down --volumes' EXIT
+          docker compose build app
+          docker compose up -d db
+          docker compose run --rm app migrate --env production --yes
+          docker compose up -d app
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/ready > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/ready
+          node "$GITHUB_WORKSPACE/Tests/Browser/notebook.mjs"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -66,6 +89,7 @@ jobs:
             ${{ runner.temp }}/s5/Notebook/Public
             ${{ runner.temp }}/s5/Notebook/notebook.png
             ${{ runner.temp }}/s5/Notebook/server.log
+            ${{ runner.temp }}/s5/verification/Package.resolved
       - uses: actions/cache/save@v4
         if: always() && steps.cache.outputs.cache-hit != 'true'
         with:

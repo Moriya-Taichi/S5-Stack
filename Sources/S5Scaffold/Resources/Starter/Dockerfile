@@ -1,4 +1,4 @@
-FROM swift:6.2.3-noble AS build
+FROM swift:6.2-noble AS build
 WORKDIR /src
 COPY . .
 RUN swift build -c release --product Server --static-swift-stdlib
@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 WORKDIR /app
 COPY --from=build --chown=s5:s5 /out/ /app/
 COPY --from=build --chown=s5:s5 /src/Public /app/Public
+RUN mkdir /data && chown s5:s5 /data
+ENV DATABASE_PATH=/data/db.sqlite
 USER s5
 EXPOSE 8080
 ENTRYPOINT ["/app/Server"]

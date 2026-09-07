@@ -19,13 +19,13 @@ enum Echo: Endpoint {
         app.middleware.use(EndpointErrorMiddleware())
         try app.endpoint(Echo.self) { input, _ in input }
         try await app.test(.POST, "/api/v1/echo", headers: ["Content-Type": "application/json"],
-                           body: ByteBuffer(string: #"{"value":"hello"}"#)) { response in
+                           body: ByteBuffer(string: #"{"value":"hello"}"#)) { response async throws in
             #expect(response.status == .ok)
             #expect(try response.content.decode(Echo.Output.self).value == "hello")
         }
         for body in [#"{"value":1}"#, #"{"value":""}"#, "not json"] {
             try await app.test(.POST, "/api/v1/echo", headers: ["Content-Type": "application/json"],
-                               body: ByteBuffer(string: body)) { response in
+                               body: ByteBuffer(string: body)) { response async throws in
                 #expect(response.status == .badRequest)
                 #expect(try response.content.decode(APIError.self).code == "invalid_input")
             }
@@ -38,7 +38,7 @@ enum Echo: Endpoint {
     try await withApp { app in
         try app.endpoint(Echo.self) { _, _ in throw DatabaseFailure() }
         try await app.test(.POST, "/api/v1/echo", headers: ["Content-Type": "application/json"],
-                           body: ByteBuffer(string: #"{"value":"hello"}"#)) { response in
+                           body: ByteBuffer(string: #"{"value":"hello"}"#)) { response async throws in
             #expect(response.status == .internalServerError)
             #expect(try response.content.decode(APIError.self).message == "An internal error occurred.")
         }
@@ -49,10 +49,10 @@ enum Echo: Endpoint {
     try await withApp { app in
         app.middleware.use(EndpointErrorMiddleware())
         try app.endpoint(Echo.self) { input, _ in input }
-        try await app.test(.POST, "/api/v1/echo", body: ByteBuffer(string: #"{"value":"hello"}"#)) { response in
+        try await app.test(.POST, "/api/v1/echo", body: ByteBuffer(string: #"{"value":"hello"}"#)) { response async throws in
             #expect(response.status == .unsupportedMediaType)
         }
-        try await app.test(.POST, "/api/v1/missing") { response in
+        try await app.test(.POST, "/api/v1/missing") { response async throws in
             #expect(response.status == .notFound)
             #expect(try response.content.decode(APIError.self).code == "http_404")
         }

@@ -11,6 +11,9 @@ public extension Site {
         buildDirectory: URL
     ) async throws {
         try await publish(sourceDirectory: sourceDirectory, buildDirectory: buildDirectory)
+        guard FileManager.default.fileExists(atPath: buildDirectory.appendingPathComponent("index.html").path) else {
+            throw CocoaError(.fileNoSuchFile, userInfo: [NSLocalizedDescriptionKey: "Ignite did not generate index.html."])
+        }
         let apiDirectory = buildDirectory.appendingPathComponent("s5", isDirectory: true)
         try FileManager.default.createDirectory(at: apiDirectory, withIntermediateDirectories: true)
         guard let runtime = Bundle.module.url(forResource: "runtime", withExtension: "mjs") else {

@@ -15,7 +15,7 @@ Nidoは独立したIaCプロジェクトです。S5はNidoを依存に含めず�
 
 ## 始める
 
-Swift 6.2以降を使用します。macOSはXcode 26.2以降、LinuxはSwift 6.2.3でCIを実行します。
+Swift 6.2以降を使用します。macOSはXcode 26.2以降、LinuxはSwift 6.2でCIを実行します。
 
 ```sh
 git clone https://github.com/Moriya-Taichi/S5-Stack.git
