@@ -1,0 +1,74 @@
+# __PROJECT_NAME__
+
+A Swift web application built with Ignite, Vapor, shared S5 API contracts, and Fluent.
+
+Requires Swift 6.2. Run commands from this directory.
+
+```sh
+swift run Frontend
+swift run Server serve --hostname 127.0.0.1 --port 8080
+```
+
+Open http://localhost:8080. The sample is a **public shared notebook**; it has no login or per-user isolation.
+It displays the latest 100 notes. Add authentication and authorization before handling private data.
+
+If you have the `s5` executable on your PATH, `s5 dev` runs both commands. Restart after editing Swift or browser assets;
+there is no file watcher. `s5 build --release` creates optimized binaries and the generated `Public/` directory.
+
+## Structure
+
+| Location | Purpose |
+| --- | --- |
+| `Sources/AppContract` | Codable DTOs, endpoint input/output types, validation, and stable wire names |
+| `Sources/Frontend` | Ignite site, layout, and pages |
+| `Assets` | Browser interactions and CSS, copied to Public by Ignite |
+| `Sources/ServerApp` | Vapor routes and server-only Fluent models/migrations |
+| `Sources/Server` | Server lifecycle |
+| `Tests/ServerAppTests` | SQLite integration tests |
+
+`Public/s5/client.mjs` is generated from the Swift endpoint catalog. Browser code imports it and calls
+`api.createNote({ text: "Hello" })`. Swift clients use `APIClient.call(NotesAPI.Create.self, input: .init(text: "Hello"))`.
+The browser runs JavaScript; it does not run Swift or inherit compile-time Swift type checking. All requests are
+decoded and validated by Vapor using the shared contract. Swift clients and server handlers are checked at compile time.
+
+## Database and migrations
+
+Local development uses `db.sqlite` and applies migrations at startup. Set `DATABASE_PATH` to relocate SQLite.
+Set `DATABASE_URL` to a PostgreSQL URL to use PostgreSQL instead. Use a persistent database and appropriate TLS for deployment.
+
+Production mode does not automatically migrate. Apply migrations as a separate deployment step:
+
+```sh
+swift run Server migrate --env production --yes
+swift run Server serve --env production --hostname 0.0.0.0 --port 8080
+```
+
+`/health` reports that the process is alive. `/ready` also checks the notes database table.
+
+## Container development
+
+The Dockerfile builds both Ignite assets and the Vapor executable. It requires a remote S5 dependency;
+an absolute `--s5-path` dependency outside the build context is only for local development.
+For reproducible builds, pin S5 to a commit with `s5 new --revision <sha>` and commit `Package.resolved`.
+
+```sh
+docker compose build
+docker compose up -d db
+docker compose run --rm app migrate --env production --yes
+docker compose up -d app
+```
+
+The Compose database password and disabled TLS are for local container development only. Configure credentials,
+networking and TLS through your deployment environment. Set `SITE_URL` when building the frontend for production metadata.
+
+## Tests
+
+```sh
+swift test
+```
+
+Nido remains a separate IaC project. This application does not import it, provision resources, or embed cloud credentials.
+Nido or any other deployment tool may deploy the image and provide the database URL.
+
+Endpoint versions are explicit. For incompatible input/output changes, add a new version and retain the old route
+while deployed clients need it. Sharing source types does not prove compatibility with previously released clients.

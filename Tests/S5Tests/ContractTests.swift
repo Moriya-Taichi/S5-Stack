@@ -34,8 +34,9 @@ struct InspectingTransport: HTTPTransport {
         #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
         let input = try WireCodec.decode(Echo.Input.self, from: #require(request.httpBody))
         #expect(input.value == "hello")
-        return (try WireCodec.encode(input), try #require(HTTPURLResponse(
-            url: #require(request.url), statusCode: 200, httpVersion: nil, headerFields: nil)))
+        let url = try #require(request.url)
+        let response = try #require(HTTPURLResponse(url: url, statusCode: 200, httpVersion: nil, headerFields: nil))
+        return (try WireCodec.encode(input), response)
     }
 }
 
@@ -49,8 +50,9 @@ struct InspectingTransport: HTTPTransport {
 struct FailingTransport: HTTPTransport {
     func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let error = APIError(code: "future_error", message: "Please retry later.")
-        return (try WireCodec.encode(error), try #require(HTTPURLResponse(
-            url: #require(request.url), statusCode: 429, httpVersion: nil, headerFields: nil)))
+        let url = try #require(request.url)
+        let response = try #require(HTTPURLResponse(url: url, statusCode: 429, httpVersion: nil, headerFields: nil))
+        return (try WireCodec.encode(error), response)
     }
 }
 

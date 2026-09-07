@@ -22,8 +22,48 @@ jobs:
         with:
           swift-version: '6.2'
       - uses: actions/cache@v4
+        id: cache
         with:
           path: .build
           key: s5-${{ runner.os }}-swift62-${{ hashFiles('Package.swift', 'Package.resolved') }}
           restore-keys: s5-${{ runner.os }}-swift62-
       - run: swift test --parallel
+      - run: node --test Tests/Browser/runtime.test.mjs
+      - name: Generate application
+        run: .build/debug/s5 new Notebook --directory "$RUNNER_TEMP/s5" --s5-path "$GITHUB_WORKSPACE"
+      - name: Test generated application
+        run: swift test --package-path "$RUNNER_TEMP/s5/Notebook" --scratch-path "$GITHUB_WORKSPACE/.build"
+      - name: Publish Ignite frontend
+        run: |
+          cd "$RUNNER_TEMP/s5/Notebook"
+          swift run --scratch-path "$GITHUB_WORKSPACE/.build" Frontend
+          test -f Public/index.html
+          test -f Public/s5/client.mjs
+      - name: Test browser against Vapor
+        if: runner.os == 'Linux'
+        run: |
+          npm install --prefix Tests/Browser --ignore-scripts --no-package-lock
+          npx --prefix Tests/Browser playwright install --with-deps chromium
+          cd "$RUNNER_TEMP/s5/Notebook"
+          "$GITHUB_WORKSPACE/.build/debug/Server" serve --hostname 127.0.0.1 --port 8080 > server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8080/ready > /dev/null; then break; fi
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8080/ready
+          S5_SCREENSHOT="$RUNNER_TEMP/s5/Notebook/notebook.png" node "$GITHUB_WORKSPACE/Tests/Browser/notebook.mjs"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: starter-${{ runner.os }}
+          path: |
+            ${{ runner.temp }}/s5/Notebook/Public
+            ${{ runner.temp }}/s5/Notebook/notebook.png
+            ${{ runner.temp }}/s5/Notebook/server.log
+      - uses: actions/cache/save@v4
+        if: always() && steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: .build
+          key: ${{ steps.cache.outputs.cache-primary-key }}

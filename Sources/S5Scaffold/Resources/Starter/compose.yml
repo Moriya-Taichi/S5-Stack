@@ -1,0 +1,22 @@
+services:
+  app:
+    build: .
+    ports: ["127.0.0.1:8080:8080"]
+    environment:
+      DATABASE_URL: postgres://s5:local-development@db:5432/s5?sslmode=disable
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: s5
+      POSTGRES_PASSWORD: local-development
+      POSTGRES_DB: s5
+    volumes: ["database:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U s5"]
+      interval: 3s
+      retries: 20
+volumes:
+  database:
