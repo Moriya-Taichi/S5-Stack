@@ -18,13 +18,13 @@ enum Echo: Endpoint {
     try await withApp { app in
         app.middleware.use(EndpointErrorMiddleware())
         try app.endpoint(Echo.self) { input, _ in input }
-        try await app.test(.POST, "/api/v1/echo", headers: [.contentType: "application/json"],
+        try await app.test(.POST, "/api/v1/echo", headers: ["Content-Type": "application/json"],
                            body: ByteBuffer(string: #"{"value":"hello"}"#)) { response in
             #expect(response.status == .ok)
             #expect(try response.content.decode(Echo.Output.self).value == "hello")
         }
         for body in [#"{"value":1}"#, #"{"value":""}"#, "not json"] {
-            try await app.test(.POST, "/api/v1/echo", headers: [.contentType: "application/json"],
+            try await app.test(.POST, "/api/v1/echo", headers: ["Content-Type": "application/json"],
                                body: ByteBuffer(string: body)) { response in
                 #expect(response.status == .badRequest)
                 #expect(try response.content.decode(APIError.self).code == "invalid_input")
@@ -37,7 +37,7 @@ enum Echo: Endpoint {
     struct DatabaseFailure: Error {}
     try await withApp { app in
         try app.endpoint(Echo.self) { _, _ in throw DatabaseFailure() }
-        try await app.test(.POST, "/api/v1/echo", headers: [.contentType: "application/json"],
+        try await app.test(.POST, "/api/v1/echo", headers: ["Content-Type": "application/json"],
                            body: ByteBuffer(string: #"{"value":"hello"}"#)) { response in
             #expect(response.status == .internalServerError)
             #expect(try response.content.decode(APIError.self).message == "An internal error occurred.")
@@ -56,5 +56,32 @@ enum Echo: Endpoint {
             #expect(response.status == .notFound)
             #expect(try response.content.decode(APIError.self).code == "http_404")
         }
+    }
+}
+
+@Test func bodyLimitsAndAuthenticationCannotBeBypassed() async throws {
+    struct Deny: AsyncMiddleware {
+        func respond(to request: Request, chainingTo next: any AsyncResponder) async throws -> Response {
+            throw Abort(.unauthorized)
+        }
+    }
+    try await withApp { app in
+        app.middleware.use(EndpointErrorMiddleware())
+        try app.endpoint(Echo.self, bodyLimit: 20) { input, _ in input }
+        let response = try await app.sendRequest(.POST, "/api/v1/echo", headers: ["Content-Type": "application/json"],
+            body: ByteBuffer(string: #"{"value":"this payload exceeds twenty bytes"}"#))
+        #expect(response.status == .payloadTooLarge)
+        #expect(try response.content.decode(APIError.self).code == "http_413")
+    }
+    try await withApp { app in
+        app.middleware.use(EndpointErrorMiddleware())
+        try app.grouped(Deny()).endpoint(Echo.self) { input, _ in
+            Issue.record("An unauthorized request reached the handler")
+            return input
+        }
+        let response = try await app.sendRequest(.POST, "/api/v1/echo", headers: ["Content-Type": "application/json"],
+            body: ByteBuffer(string: #"{"value":"hello"}"#))
+        #expect(response.status == .unauthorized)
+        #expect(try response.content.decode(APIError.self).code == "http_401")
     }
 }

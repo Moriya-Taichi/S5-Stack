@@ -2,7 +2,7 @@
 
 A Swift web application built with Ignite, Vapor, shared S5 API contracts, and Fluent.
 
-Requires Swift 6.2. Run commands from this directory.
+Requires Swift 6.2 or later (Xcode 26.2+ on macOS; CI uses Swift 6.2.3 on Linux). Run commands from this directory.
 
 ```sh
 swift run Frontend

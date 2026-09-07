@@ -24,6 +24,7 @@ enum Invalid: Endpoint {
     var catalog = EndpointCatalog()
     try catalog.register(Echo.self, as: "echo")
     #expect(throws: ContractError.self) { try catalog.register(Echo.self, as: "another") }
+    #expect(throws: ContractError.self) { try catalog.register(Echo.self, as: "__proto__") }
 }
 
 struct InspectingTransport: HTTPTransport {

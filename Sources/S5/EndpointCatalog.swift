@@ -8,6 +8,11 @@ public struct EndpointCatalog: Sendable {
     public init() {}
 
     public mutating func register<E: Endpoint>(_ endpoint: E.Type, as key: String) throws {
+        guard let first = key.utf8.first,
+              (65...90).contains(first) || (97...122).contains(first),
+              key.utf8.allSatisfy({ (65...90).contains($0) || (97...122).contains($0) || (48...57).contains($0) }) else {
+            throw ContractError.invalidClientName(key)
+        }
         let path = try E.path
         guard routes[key] == nil, !routes.values.contains(path) else {
             throw ContractError.duplicateEndpoint(path)

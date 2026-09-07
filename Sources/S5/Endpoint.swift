@@ -36,6 +36,7 @@ public extension Endpoint {
 public enum ContractError: Error, Equatable, Sendable {
     case invalidEndpointName(String)
     case duplicateEndpoint(String)
+    case invalidClientName(String)
 }
 
 /// JSON `{}` for endpoints that take no input or return no payload.

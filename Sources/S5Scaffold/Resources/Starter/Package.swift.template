@@ -3,8 +3,9 @@ import PackageDescription
 
 let package = Package(
     name: "__PROJECT_NAME__",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v14), .iOS(.v17)],
     products: [
+        .library(name: "AppContract", targets: ["AppContract"]),
         .executable(name: "Frontend", targets: ["Frontend"]),
         .executable(name: "Server", targets: ["Server"]),
     ],
@@ -19,7 +20,8 @@ let package = Package(
     targets: [
         .target(name: "AppContract", dependencies: [.product(name: "S5", package: "__S5_PACKAGE_ID__")]),
         .target(name: "ServerApp", dependencies: [
-            "AppContract", .product(name: "S5Vapor", package: "__S5_PACKAGE_ID__"),
+            "AppContract", .product(name: "S5", package: "__S5_PACKAGE_ID__"),
+            .product(name: "S5Vapor", package: "__S5_PACKAGE_ID__"),
             .product(name: "Vapor", package: "vapor"),
             .product(name: "Fluent", package: "fluent"),
             .product(name: "FluentSQLiteDriver", package: "fluent-sqlite-driver"),
@@ -31,7 +33,8 @@ let package = Package(
             .product(name: "Ignite", package: "Ignite"),
         ]),
         .testTarget(name: "ServerAppTests", dependencies: [
-            "ServerApp", "AppContract", .product(name: "S5Client", package: "__S5_PACKAGE_ID__"),
+            "ServerApp", "AppContract", .product(name: "S5", package: "__S5_PACKAGE_ID__"),
+            .product(name: "S5Client", package: "__S5_PACKAGE_ID__"),
             .product(name: "VaporTesting", package: "vapor"),
         ]),
     ]

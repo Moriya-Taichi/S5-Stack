@@ -14,12 +14,15 @@ public extension RoutesBuilder {
         let path = try E.path.split(separator: "/").map { PathComponent.constant(String($0)) }
         return on(.POST, path, body: .collect(maxSize: bodyLimit)) { request async throws -> Response in
             do {
-                guard request.headers.contentType == .json else {
+                guard let contentType = request.headers.contentType,
+                      contentType.type.lowercased() == "application",
+                      contentType.subType.lowercased() == "json" else {
                     throw Abort(.unsupportedMediaType)
                 }
                 guard let buffer = request.body.data else {
                     throw APIError.invalidInput("A JSON request body is required.")
                 }
+                guard buffer.readableBytes <= bodyLimit.value else { throw Abort(.payloadTooLarge) }
                 let input: E.Input
                 do {
                     input = try WireCodec.decode(E.Input.self, from: Data(buffer.readableBytesView))
@@ -28,7 +31,7 @@ public extension RoutesBuilder {
                 }
                 try E.validate(input)
                 let output = try await handler(input, request)
-                return Response(status: .ok, headers: [.contentType: "application/json", .cacheControl: "no-store"],
+                return Response(status: .ok, headers: ["Content-Type": "application/json", "Cache-Control": "no-store"],
                                 body: .init(data: try WireCodec.encode(output)))
             } catch {
                 return try endpointErrorResponse(error, request: request)

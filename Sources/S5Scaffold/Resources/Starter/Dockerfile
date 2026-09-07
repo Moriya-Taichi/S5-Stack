@@ -1,4 +1,4 @@
-FROM swift:6.2-noble AS build
+FROM swift:6.2.3-noble AS build
 WORKDIR /src
 COPY . .
 RUN swift build -c release --product Server --static-swift-stdlib
