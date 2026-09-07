@@ -1,5 +1,7 @@
 FROM swift:6.2-noble AS build
 WORKDIR /src
+ARG SITE_URL=http://localhost:8080
+ENV SITE_URL=${SITE_URL}
 COPY . .
 RUN swift build -c release --product Server --static-swift-stdlib
 RUN swift run -c release Frontend

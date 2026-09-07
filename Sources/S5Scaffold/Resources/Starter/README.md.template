@@ -59,7 +59,7 @@ docker compose up -d app
 ```
 
 The Compose database password and disabled TLS are for local container development only. Configure credentials,
-networking and TLS through your deployment environment. Set `SITE_URL` when building the frontend for production metadata.
+networking and TLS through your deployment environment. Set `SITE_URL` when building the frontend for production metadata, or pass `--build-arg SITE_URL=https://example.com` to the container build.
 If using SQLite in the container instead, mount a persistent volume at `/data` (the default `DATABASE_PATH` is `/data/db.sqlite`).
 
 ## Tests

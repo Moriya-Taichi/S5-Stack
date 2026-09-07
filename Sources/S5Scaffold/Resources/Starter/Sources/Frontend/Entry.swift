@@ -56,8 +56,8 @@ struct Home: StaticPage {
                 Text("280 characters · shared with everyone using this notebook").class("hint")
             }
             .class("composer")
-            Text("Loading notes…").id("status").customAttribute(name: "role", value: "status")
-            Tag("ul").id("notes").class("notes").customAttribute(name: "aria-label", value: "Notes")
+            Text("Loading notes…").id("status").attribute("role", "status")
+            Tag("ul").id("notes").class("notes").attribute("aria-label", "Notes")
             Tag("footer") {
                 Text("Made with S5 Stack").class("hint")
             }
