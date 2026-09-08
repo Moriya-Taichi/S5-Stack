@@ -42,6 +42,13 @@ jobs:
           cp Package.resolved "$RUNNER_TEMP/s5/verification/Package.resolved"
       - name: Generate application
         run: .build/debug/s5 new Notebook --directory "$RUNNER_TEMP/s5" --s5-path "$GITHUB_WORKSPACE"
+      - name: Generate Nido configuration and diagram
+        run: |
+          cd "$RUNNER_TEMP/s5/Notebook"
+          "$GITHUB_WORKSPACE/.build/debug/s5" infra synth
+          "$GITHUB_WORKSPACE/.build/debug/s5" infra --skip-synth diagram --format svg --output architecture.svg
+          python "$GITHUB_WORKSPACE/Tests/Infrastructure/verify.py" Infrastructure/.nido/main.tf.json
+          test -s architecture.svg
       - name: Test generated application
         run: swift test --package-path "$RUNNER_TEMP/s5/Notebook" --scratch-path "$GITHUB_WORKSPACE/.build"
       - name: Publish Ignite frontend
@@ -85,11 +92,39 @@ jobs:
           done
           curl -fsS http://127.0.0.1:8080/ready
           node "$GITHUB_WORKSPACE/Tests/Browser/notebook.mjs"
+      - uses: hashicorp/setup-terraform@v3
+        if: runner.os == 'Linux'
+        with:
+          terraform_version: '1.9.8'
+          terraform_wrapper: false
+      - name: Deploy with Nido and verify lifecycle
+        if: runner.os == 'Linux'
+        run: |
+          cd "$RUNNER_TEMP/s5/Notebook"
+          export TF_VAR_image=containernotes-app:latest
+          s5_cli="$GITHUB_WORKSPACE/.build/debug/s5"
+          trap '"$s5_cli" infra destroy -auto-approve || true' EXIT
+          "$s5_cli" infra init -input=false
+          "$s5_cli" infra validate
+          set +e
+          "$s5_cli" infra plan -input=false -detailed-exitcode -out=review.tfplan
+          plan_status=$?
+          set -e
+          test "$plan_status" -eq 2
+          "$s5_cli" infra --skip-synth apply review.tfplan
+          node "$GITHUB_WORKSPACE/Tests/Browser/notebook.mjs"
+          # A second plan must be empty: migration does not rerun and state stays with Nido's engine.
+          "$s5_cli" infra plan -input=false -detailed-exitcode
+          # Recreate the application, keeping the Nido-managed volume, and verify persistence.
+          curl -fsS -H 'Content-Type: application/json' -d '{"text":"Nido persistent note"}' http://127.0.0.1:8080/api/v1/notes.create
+          "$s5_cli" infra apply -input=false -auto-approve -replace=docker_container.app
+          curl -fsS -H 'Content-Type: application/json' -d '{}' http://127.0.0.1:8080/api/v1/notes.list | python -c 'import json,sys; assert "Nido persistent note" in str(json.load(sys.stdin))'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: starter-${{ runner.os }}
           path: |
+            ${{ runner.temp }}/s5/Notebook/architecture.svg
             ${{ runner.temp }}/s5/Notebook/Public
             ${{ runner.temp }}/s5/Notebook/notebook.png
             ${{ runner.temp }}/s5/Notebook/server.log

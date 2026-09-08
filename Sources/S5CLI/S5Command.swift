@@ -6,7 +6,7 @@ import S5Scaffold
 struct S5Command: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "s5", abstract: "Build Swift web applications with Ignite and Vapor.",
-        version: "0.1.0-dev", subcommands: [New.self, Build.self, Dev.self])
+        version: "0.1.0-dev", subcommands: [New.self, Build.self, Dev.self, Infra.self])
 }
 
 struct New: ParsableCommand {
@@ -57,6 +57,24 @@ struct Dev: ParsableCommand {
         let root = try applicationDirectory(directory)
         try execute(["run", "Frontend"], in: root)
         try execute(["run", "Server", "serve", "--hostname", hostname, "--port", String(port)], in: root)
+    }
+}
+
+/// Forward Nido arguments verbatim, including engine flags and exit codes.
+/// SwiftPM runs the CLI supplied by the infrastructure package's pinned Nido dependency.
+struct Infra: ParsableCommand {
+    static let configuration = CommandConfiguration(abstract: "Manage the application's infrastructure with Nido.")
+    @Argument(parsing: .unconditionalRemaining, help: "Nido options and command, e.g. synth, plan, or --skip-synth apply review.tfplan.")
+    var arguments: [String] = []
+
+    func run() throws {
+        let root = try applicationDirectory(".")
+        let infrastructure = root.appendingPathComponent("Infrastructure")
+        guard FileManager.default.fileExists(atPath: infrastructure.appendingPathComponent("Package.swift").path) else {
+            throw ValidationError("This application has no Infrastructure/Package.swift. Add the Nido infrastructure package from the current starter template.")
+        }
+        try execute(["run", "--package-path", infrastructure.path, "nido", "--package", infrastructure.path]
+                    + (arguments.isEmpty ? ["--help"] : arguments), in: root)
     }
 }
 

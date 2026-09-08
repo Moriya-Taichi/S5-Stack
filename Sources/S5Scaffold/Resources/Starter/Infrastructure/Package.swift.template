@@ -1,0 +1,14 @@
+// swift-tools-version: 6.2
+import PackageDescription
+
+let package = Package(
+    name: "__PROJECT_NAME__Infrastructure",
+    platforms: [.macOS(.v14)],
+    dependencies: [
+        .package(url: "https://github.com/Moriya-Taichi/Nido.git",
+                 revision: "a68679e85cb5f74d316d703cbcdadc218289ffdb")
+    ],
+    targets: [
+        .executableTarget(name: "Infrastructure", dependencies: [.product(name: "Nido", package: "Nido")])
+    ]
+)
